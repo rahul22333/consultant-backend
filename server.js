@@ -1,6 +1,11 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+console.log(
+  "PROJECT ID:",
+  process.env.FIREBASE_PROJECT_ID
+);
+
 import express from "express";
 import cors from "cors";
 
@@ -11,7 +16,15 @@ import adminRoutes from "./routes/adminRoutes.js";
 const app = express();
 
 // ✅ Middlewares
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://consultant-frontend-6m91.vercel.app/",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // ✅ Routes

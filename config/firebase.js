@@ -1,7 +1,17 @@
+import dotenv from "dotenv";
+
+dotenv.config();
+
 import admin from "firebase-admin";
 
-// ✅ FIREBASE SERVICE ACCOUNT FROM ENV
+// ✅ DEBUG
+console.log(
+  "PROJECT ID:",
+  process.env.FIREBASE_PROJECT_ID
+);
+
 const serviceAccount = {
+
   projectId:
     process.env.FIREBASE_PROJECT_ID,
 
@@ -15,22 +25,21 @@ const serviceAccount = {
     ),
 };
 
-// ✅ PREVENT MULTIPLE INITIALIZATION
+// ✅ PREVENT MULTIPLE INIT
 if (!admin.apps.length) {
 
   admin.initializeApp({
+
     credential:
       admin.credential.cert(
         serviceAccount
       ),
 
-    // ✅ REALTIME DATABASE URL
     databaseURL:
       "https://consultant-app-a08eb-default-rtdb.firebaseio.com",
   });
 }
 
-// ✅ REALTIME DATABASE
 const db = admin.database();
 
 export default db;
