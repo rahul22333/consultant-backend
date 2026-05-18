@@ -6,7 +6,7 @@ import crypto from "crypto";
 import db from "../config/firebase.js";
 
 // 🔒 NEVER trust frontend amount
-const FIXED_PRICE = 500;
+const FIXED_PRICE = 200;
 
 // 🔑 Razorpay instance
 const razorpay = new Razorpay({
