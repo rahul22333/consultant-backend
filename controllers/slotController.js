@@ -48,13 +48,17 @@ const generateTimeSlots = (
 
 
 // ✅ GET SLOTS
-export const getSlotsByDate = async (req, res) => {
+export const getSlotsByDate = async (
+  req,
+  res
+) => {
 
   try {
 
     const { date } = req.query;
 
     if (!date) {
+
       return res.status(400).json({
         error: "Date is required",
       });
@@ -98,6 +102,7 @@ export const getSlotsByDate = async (req, res) => {
 
         return {
           time,
+
           isBooked:
             booking?.isBooked ||
             isLocked ||
@@ -137,6 +142,7 @@ export const lockSlot = async (
 
       return res.status(400).json({
         success: false,
+
         message:
           "Date and time required",
       });
@@ -172,6 +178,7 @@ export const lockSlot = async (
 
       return res.status(400).json({
         success: false,
+
         message:
           "Slot already locked",
       });
@@ -179,6 +186,7 @@ export const lockSlot = async (
 
     res.json({
       success: true,
+
       message: "Slot locked",
     });
 
@@ -191,6 +199,54 @@ export const lockSlot = async (
 
     res.status(500).json({
       success: false,
+
+      message: "Server error",
+    });
+  }
+};
+
+
+// ✅ UNLOCK SLOT
+export const unlockSlot = async (
+  req,
+  res
+) => {
+
+  try {
+
+    const { date, time } =
+      req.body;
+
+    if (!date || !time) {
+
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "Date and time required",
+      });
+    }
+
+    await db
+      .ref(`locks/${date}/${time}`)
+      .remove();
+
+    res.json({
+      success: true,
+
+      message: "Slot unlocked",
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Unlock Slot Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+
       message: "Server error",
     });
   }
