@@ -4,6 +4,9 @@ dotenv.config();
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import db from "../config/firebase.js";
+import {
+  sendBookingEmails,
+} from "../services/sendEmail.js";
 
 // 🔒 NEVER trust frontend amount
 const FIXED_PRICE = 200;
@@ -107,6 +110,15 @@ export const verifyPayment = async (req, res) => {
 
     // ✅ STEP 5: Mark payment processed
     await paymentRef.set(true);
+     // ✅ SEND EMAILS
+await sendBookingEmails({
+  name,
+  contact,
+  date,
+  time,
+  paymentId:
+    razorpay_payment_id,
+});
 
     // ✅ SUCCESS
     res.json({
