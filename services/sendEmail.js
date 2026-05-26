@@ -1,19 +1,19 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const transporter =
-  nodemailer.createTransport({
+const resend = new Resend(
+  process.env.RESEND_API_KEY
+);
 
-    service: "gmail",
+// ✅ EMAIL CHECK
+const isEmail = (value) => {
 
-    auth: {
-      user: process.env.EMAIL_USER,
-
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value
+  );
+};
 
 
-// ✅ SEND BOOKING EMAIL
+// ✅ SEND BOOKING EMAILS
 export const sendBookingEmails =
   async ({
     name,
@@ -26,40 +26,45 @@ export const sendBookingEmails =
     try {
 
       // ✅ USER EMAIL
-      const userMail = {
+      if (isEmail(contact)) {
 
-        from: process.env.EMAIL_USER,
+        await resend.emails.send({
 
-        to: contact,
+          from:
+            "Consultation <onboarding@resend.dev>",
 
-        subject:
-          "Consultation Booking Confirmed",
+          to: contact,
 
-        html: `
-          <h2>Booking Confirmed 🎉</h2>
+          subject:
+            "Booking Confirmed 🎉",
 
-          <p>Hello ${name},</p>
+          html: `
+            <h2>Booking Confirmed</h2>
 
-          <p>Your consultation has been booked successfully.</p>
+            <p>Hello ${name},</p>
 
-          <hr />
+            <p>Your consultation has been booked successfully.</p>
 
-          <p><strong>Date:</strong> ${date}</p>
+            <hr />
 
-          <p><strong>Time:</strong> ${time}</p>
+            <p><strong>Date:</strong> ${date}</p>
 
-          <p><strong>Payment ID:</strong> ${paymentId}</p>
+            <p><strong>Time:</strong> ${time}</p>
 
-          <hr />
+            <p><strong>Payment ID:</strong> ${paymentId}</p>
+          `,
+        });
 
-          <p>Thank you.</p>
-        `,
-      };
+        console.log(
+          "User email sent"
+        );
+      }
 
       // ✅ DOCTOR EMAIL
-      const doctorMail = {
+      await resend.emails.send({
 
-        from: process.env.EMAIL_USER,
+        from:
+          "Consultation <onboarding@resend.dev>",
 
         to: process.env.DOCTOR_EMAIL,
 
@@ -79,19 +84,10 @@ export const sendBookingEmails =
 
           <p><strong>Payment ID:</strong> ${paymentId}</p>
         `,
-      };
-
-      // ✅ SEND BOTH
-      await transporter.sendMail(
-        userMail
-      );
-
-      await transporter.sendMail(
-        doctorMail
-      );
+      });
 
       console.log(
-        "Emails sent successfully"
+        "Doctor email sent"
       );
 
     } catch (error) {
