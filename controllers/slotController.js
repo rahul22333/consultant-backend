@@ -3,47 +3,53 @@
 import db from "../config/firebase.js";
 
 
-// ✅ GENERATE DYNAMIC SLOTS
+// ✅ GENERATE DYNAMIC SLOTS (24-hour strings, timezone-independent)
 const generateTimeSlots = (
   startHour = 16,
   startMinute = 30,
   endHour = 21,
   interval = 30
 ) => {
-
   const slots = [];
+  let hour = startHour;
+  let minute = startMinute;
 
-  const start = new Date();
+  while (hour < endHour || (hour === endHour && minute === 0)) {
+    if (hour === endHour && minute > 0) break;
+    const hh = String(hour).padStart(2, "0");
+    const mm = String(minute).padStart(2, "0");
+    slots.push(`${hh}:${mm}`);
 
-  start.setHours(startHour);
-  start.setMinutes(startMinute);
-  start.setSeconds(0);
-
-  const end = new Date();
-
-  end.setHours(endHour);
-  end.setMinutes(0);
-  end.setSeconds(0);
-
-  while (start < end) {
-
-    const formatted = start.toLocaleTimeString(
-      "en-US",
-      {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      }
-    );
-
-    slots.push(formatted);
-
-    start.setMinutes(
-      start.getMinutes() + interval
-    );
+    minute += interval;
+    if (minute >= 60) {
+      hour += Math.floor(minute / 60);
+      minute = minute % 60;
+    }
   }
 
   return slots;
+};
+
+// ✅ GET PRICE FROM DATABASE
+export const getFixedPrice = async () => {
+  try {
+    const snapshot = await db.ref("settings/price").once("value");
+    const val = snapshot.val();
+    return val ? Number(val) : 200;
+  } catch (error) {
+    console.error("Error fetching price from Firebase:", error);
+    return 200;
+  }
+};
+
+// ✅ PUBLIC GET PRICE
+export const getPublicPrice = async (req, res) => {
+  try {
+    const price = await getFixedPrice();
+    res.json({ price });
+  } catch (error) {
+    res.json({ price: 200 });
+  }
 };
 
 
@@ -249,5 +255,36 @@ export const unlockSlot = async (
 
       message: "Server error",
     });
+  }
+};
+
+
+// ✅ PURGE EXPIRED LOCKS FROM DATABASE
+export const purgeExpiredLocks = async () => {
+  try {
+    const locksRef = db.ref("locks");
+    const snapshot = await locksRef.once("value");
+    const dates = snapshot.val();
+    if (!dates) return;
+
+    const now = Date.now();
+    const updates = {};
+
+    for (const date in dates) {
+      const slots = dates[date];
+      for (const time in slots) {
+        const lock = slots[time];
+        if (lock && lock.expiresAt < now) {
+          updates[`${date}/${time}`] = null;
+        }
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await locksRef.update(updates);
+      console.log(`[Firebase Cleanup] Purged ${Object.keys(updates).length} expired locks.`);
+    }
+  } catch (error) {
+    console.error("Purge Expired Locks Error:", error);
   }
 };

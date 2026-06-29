@@ -99,3 +99,32 @@ export const cancelBooking =
       });
     }
   };
+
+
+// ✅ GET SETTINGS
+export const getSettings = async (req, res) => {
+  try {
+    const snapshot = await db.ref("settings").once("value");
+    const settings = snapshot.val() || { price: 200 };
+    res.json(settings);
+  } catch (error) {
+    console.error("Get Settings Error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+
+// ✅ UPDATE SETTINGS
+export const updateSettings = async (req, res) => {
+  try {
+    const { price } = req.body;
+    if (price === undefined || isNaN(Number(price)) || Number(price) <= 0) {
+      return res.status(400).json({ error: "Invalid price value" });
+    }
+    await db.ref("settings").update({ price: Number(price) });
+    res.json({ success: true, message: "Settings updated" });
+  } catch (error) {
+    console.error("Update Settings Error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};

@@ -13,6 +13,16 @@ const isEmail = (value) => {
 };
 
 
+const formatTimeTo12Hour = (time24) => {
+  if (!time24 || !time24.includes(":")) return time24;
+  const [hoursStr, minutesStr] = time24.split(":");
+  const hours = parseInt(hoursStr, 10);
+  const modifier = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  const formattedHours = String(displayHours).padStart(2, "0");
+  return `${formattedHours}:${minutesStr} ${modifier}`;
+};
+
 // ✅ SEND BOOKING EMAILS
 export const sendBookingEmails =
   async ({
@@ -24,6 +34,7 @@ export const sendBookingEmails =
   }) => {
 
     try {
+      const formattedTime = formatTimeTo12Hour(time);
 
       // ✅ USER EMAIL
       if (isEmail(contact)) {
@@ -49,7 +60,7 @@ export const sendBookingEmails =
 
             <p><strong>Date:</strong> ${date}</p>
 
-            <p><strong>Time:</strong> ${time}</p>
+            <p><strong>Time:</strong> ${formattedTime}</p>
 
             <p><strong>Payment ID:</strong> ${paymentId}</p>
           `,
@@ -80,7 +91,7 @@ export const sendBookingEmails =
 
           <p><strong>Date:</strong> ${date}</p>
 
-          <p><strong>Time:</strong> ${time}</p>
+          <p><strong>Time:</strong> ${formattedTime}</p>
 
           <p><strong>Payment ID:</strong> ${paymentId}</p>
         `,

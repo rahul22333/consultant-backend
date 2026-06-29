@@ -16,6 +16,7 @@ import authRoutes from "./routes/authRoutes.js";
 import helmet from "helmet";
 
 import rateLimit from "express-rate-limit";
+import { purgeExpiredLocks } from "./controllers/slotController.js";
 
 const app = express();
 
@@ -29,11 +30,45 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+
+// Capture raw body for signature verification in webhooks
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 app.use(helmet());
 
+// ✅ 1. Global Rate Limiter (Moved to top)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: {
+    success: false,
+    message: "Too many requests, try again later.",
+  },
+});
+app.use(limiter);
+
+// ✅ 2. Strict Payment Limiter (Moved to top)
+const paymentLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  message: {
+    success: false,
+    message: "Too many payment attempts",
+  },
+});
+
 // ✅ Routes
+app.use(
+  "/api/payment",
+  paymentLimiter,
+  paymentRoutes
+);
 app.use("/api/slots", slotRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
@@ -43,41 +78,9 @@ app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// rate limit
-const limiter = rateLimit({
-
-  windowMs: 15 * 60 * 1000,
-
-  max: 100,
-
-  message: {
-    success: false,
-    message:
-      "Too many requests, try again later.",
-  },
-});
-
-app.use(limiter);
-
-//Strict Payment Limiter
-const paymentLimiter = rateLimit({
-
-  windowMs: 5 * 60 * 1000,
-
-  max: 10,
-
-  message: {
-    success: false,
-    message:
-      "Too many payment attempts",
-  },
-});
-
-app.use(
-  "/api/payment",
-  paymentLimiter,
-  paymentRoutes
-);
+// ✅ Schedule lock purge
+purgeExpiredLocks(); // run once on startup
+setInterval(purgeExpiredLocks, 10 * 60 * 1000); // run every 10 minutes
 
 const PORT = process.env.PORT || 5000;
 

@@ -7,9 +7,7 @@ import db from "../config/firebase.js";
 import {
   sendBookingEmails,
 } from "../services/sendEmail.js";
-
-// 🔒 NEVER trust frontend amount
-const FIXED_PRICE = 200;
+import { getFixedPrice } from "./slotController.js";
 
 // 🔑 Razorpay instance
 const razorpay = new Razorpay({
@@ -18,12 +16,21 @@ const razorpay = new Razorpay({
 });
 
 
-// ✅ CREATE ORDER
+// ✅ CREATE ORDER (Accept details to store in Razorpay order notes)
 export const createOrder = async (req, res) => {
   try {
+    const { name, contact, date, time } = req.body;
+    const price = await getFixedPrice();
+
     const order = await razorpay.orders.create({
-      amount: FIXED_PRICE * 100,
+      amount: price * 100,
       currency: "INR",
+      notes: {
+        name: name || "",
+        contact: contact || "",
+        date: date || "",
+        time: time || "",
+      },
     });
 
     res.json(order);
@@ -133,5 +140,101 @@ await sendBookingEmails({
       success: false,
       message: "Server error",
     });
+  }
+};
+
+
+// ✅ WEBHOOK SIGNATURE VERIFICATION + MID-PAYMENT RESILIENCY
+export const handleWebhook = async (req, res) => {
+  try {
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!secret) {
+      console.warn("RAZORPAY_WEBHOOK_SECRET is not configured.");
+      return res.status(500).send("Webhook secret not set");
+    }
+
+    const shasum = crypto.createHmac("sha256", secret);
+    shasum.update(req.rawBody || JSON.stringify(req.body));
+    const digest = shasum.digest("hex");
+
+    if (digest !== req.headers["x-razorpay-signature"]) {
+      console.warn("Invalid webhook signature.");
+      return res.status(400).send("Invalid signature");
+    }
+
+    const event = req.body.event;
+    if (event === "payment.captured") {
+      const payment = req.body.payload?.payment?.entity;
+      if (!payment) {
+        return res.status(400).send("No payment entity");
+      }
+
+      const paymentId = payment.id;
+      const { name, contact, date, time } = payment.notes || {};
+
+      if (!name || !contact || !date || !time) {
+        console.warn("[Webhook] Missing metadata notes for payment:", paymentId);
+        return res.json({ status: "skipped", message: "Missing notes" });
+      }
+
+      // Idempotency check
+      const paymentRef = db.ref(`payments/${paymentId}`);
+      const existing = await paymentRef.once("value");
+
+      if (existing.exists()) {
+        console.log(`[Webhook] Payment ${paymentId} already processed.`);
+        return res.json({ status: "ok", message: "Already processed" });
+      }
+
+      // Lock slot + save booking atomically
+      const slotRef = db.ref(`slots/${date}/${time}`);
+      const result = await slotRef.transaction((currentData) => {
+        if (!currentData || !currentData.isBooked) {
+          return {
+            isBooked: true,
+            name,
+            contact,
+            paymentId,
+            createdAt: Date.now(),
+          };
+        }
+        return; // already booked
+      });
+
+      if (!result.committed) {
+        console.warn(`[Webhook] Slot ${date} ${time} already booked. Processing refund manually needed.`);
+        return res.status(400).json({ success: false, message: "Slot already booked" });
+      }
+
+      // Record booking
+      const bookingRef = db.ref("bookings").push();
+      await bookingRef.set({
+        name,
+        contact,
+        date,
+        time,
+        paymentId,
+        createdAt: Date.now(),
+      });
+
+      // Mark payment processed
+      await paymentRef.set(true);
+
+      // Send emails
+      await sendBookingEmails({
+        name,
+        contact,
+        date,
+        time,
+        paymentId,
+      });
+
+      console.log(`[Webhook] Successfully confirmed booking for ${name} on ${date} at ${time}`);
+    }
+
+    res.json({ status: "ok" });
+  } catch (error) {
+    console.error("Webhook processing error:", error);
+    res.status(500).send("Webhook handler error");
   }
 };
